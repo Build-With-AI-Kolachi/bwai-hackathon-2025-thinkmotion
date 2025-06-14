@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useSession } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
@@ -12,26 +13,87 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import GenerationChat from "@/components/generation-chat"
 
 export default function VideoPage({ params }: { params: { id: string } }) {
+  const { data: session } = useSession()
   const [copied, setCopied] = useState(false)
   const [liked, setLiked] = useState(false)
+  const [videoData, setVideoData] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
 
-  // In a real app, you would fetch this data based on the video ID
-  const videoData = {
-    id: params.id,
-    title: "Understanding Fourier Transforms",
-    prompt:
-      "Create a video explaining Fourier transforms with visual examples showing how complex signals can be broken down into simpler sine waves. Include animations of the circular motion representation.",
-    videoUrl: "/placeholder.svg?height=720&width=1280",
-    duration: "4:32",
-    createdAt: "2023-05-05T14:30:00Z",
-    options: {
+  useEffect(() => {
+    const fetchVideo = async () => {
+      try {
+        const response = await fetch(`/api/video/${params.id}`)
+        if (response.ok) {
+          const data = await response.json()
+          setVideoData(data)
+        }
+      } catch (error) {
+        console.error('Error fetching video:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    if (session) {
+      fetchVideo()
+    }
+  }, [params.id, session])
+
+  // Poll for status updates if video is generating
+  useEffect(() => {
+    if (!videoData || videoData.status !== 'GENERATING') return
+
+    const pollStatus = async () => {
+      try {
+        const response = await fetch(`/api/video/${params.id}/status`)
+        if (response.ok) {
+          const statusData = await response.json()
+          if (statusData.status !== videoData.status) {
+            // Status changed, refetch full video data
+            const fullResponse = await fetch(`/api/video/${params.id}`)
+            if (fullResponse.ok) {
+              const fullData = await fullResponse.json()
+              setVideoData(fullData)
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error polling video status:', error)
+      }
+    }
+
+    const interval = setInterval(pollStatus, 3000) // Poll every 3 seconds
+    return () => clearInterval(interval)
+  }, [params.id, videoData?.status])
+
+  if (loading || !videoData) {
+    return (
+      <div className="min-h-screen bg-black text-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p>Loading video...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Use fetched data or fallback
+  const displayData = {
+    id: videoData.id || params.id,
+    title: videoData.title || "Understanding Fourier Transforms",
+    prompt: videoData.prompt || "Create a video explaining Fourier transforms with visual examples showing how complex signals can be broken down into simpler sine waves. Include animations of the circular motion representation.",
+    videoUrl: videoData.videoUrl || "/placeholder.svg?height=720&width=1280",
+    duration: videoData.duration || "4:32",
+    createdAt: videoData.createdAt || "2023-05-05T14:30:00Z",
+    status: videoData.status || "COMPLETED",
+    options: videoData.options || {
       topic: "Calculus",
       complexity: "Intermediate",
       duration: "5 minutes",
       style: "3Blue1Brown",
       narration: "None",
     },
-    manimCode: `from manim import *
+    manimCode: videoData.manimCode || `from manim import *
 
 class FourierCirclesScene(Scene):
     def construct(self):
@@ -144,11 +206,17 @@ class FourierCirclesScene(Scene):
         {/* Video title and actions */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
           <div>
-            <h1 className="text-3xl font-bold">{videoData.title}</h1>
+            <h1 className="text-3xl font-bold">{displayData.title}</h1>
             <div className="flex items-center mt-2 text-gray-400 text-sm">
-              <Clock className="h-4 w-4 mr-1" /> {videoData.duration}
+              <Clock className="h-4 w-4 mr-1" /> {displayData.duration}
               <span className="mx-2">•</span>
-              <span>Generated on {formatDate(videoData.createdAt)}</span>
+              <span>Generated on {formatDate(displayData.createdAt)}</span>
+              {displayData.status === 'GENERATING' && (
+                <>
+                  <span className="mx-2">•</span>
+                  <span className="text-yellow-400">Generating...</span>
+                </>
+              )}
             </div>
           </div>
           <div className="flex space-x-2">
@@ -203,7 +271,31 @@ class FourierCirclesScene(Scene):
           {/* Video player and details */}
           <div className="lg:col-span-2">
             <div className="bg-gray-900 rounded-xl overflow-hidden mb-6">
-              <VideoPlayer videoUrl={videoData.videoUrl} />
+              {displayData.status === 'GENERATING' ? (
+                <div className="aspect-video flex items-center justify-center bg-gray-800">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500 mx-auto mb-4"></div>
+                    <h3 className="text-xl font-semibold mb-2">Generating Video...</h3>
+                    <p className="text-gray-400">AI is creating your Manim animation</p>
+                    <div className="mt-4 bg-gray-700 rounded-full h-2 w-64 mx-auto">
+                      <div className="bg-blue-500 h-2 rounded-full animate-pulse" style={{width: '60%'}}></div>
+                    </div>
+                  </div>
+                </div>
+              ) : displayData.status === 'FAILED' ? (
+                <div className="aspect-video flex items-center justify-center bg-gray-800">
+                  <div className="text-center">
+                    <div className="text-red-500 text-6xl mb-4">⚠️</div>
+                    <h3 className="text-xl font-semibold mb-2">Generation Failed</h3>
+                    <p className="text-gray-400">There was an error generating your video</p>
+                    <button className="mt-4 bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded">
+                      Try Again
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <VideoPlayer videoUrl={displayData.videoUrl} />
+              )}
             </div>
 
             <Tabs defaultValue="details" className="mb-6">
@@ -222,23 +314,23 @@ class FourierCirclesScene(Scene):
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                     <div>
                       <h4 className="text-sm font-medium text-gray-400 mb-1">Topic</h4>
-                      <p className="text-white">{videoData.options.topic}</p>
+                      <p className="text-white">{displayData.options.topic}</p>
                     </div>
                     <div>
                       <h4 className="text-sm font-medium text-gray-400 mb-1">Complexity</h4>
-                      <p className="text-white">{videoData.options.complexity}</p>
+                      <p className="text-white">{displayData.options.complexity}</p>
                     </div>
                     <div>
                       <h4 className="text-sm font-medium text-gray-400 mb-1">Duration</h4>
-                      <p className="text-white">{videoData.options.duration}</p>
+                      <p className="text-white">{displayData.options.duration}</p>
                     </div>
                     <div>
                       <h4 className="text-sm font-medium text-gray-400 mb-1">Style</h4>
-                      <p className="text-white">{videoData.options.style}</p>
+                      <p className="text-white">{displayData.options.style}</p>
                     </div>
                     <div>
                       <h4 className="text-sm font-medium text-gray-400 mb-1">Narration</h4>
-                      <p className="text-white">{videoData.options.narration}</p>
+                      <p className="text-white">{displayData.options.narration}</p>
                     </div>
                   </div>
                 </div>
@@ -252,7 +344,7 @@ class FourierCirclesScene(Scene):
                       variant="outline"
                       size="sm"
                       className="border-gray-700 text-gray-300 hover:bg-gray-800"
-                      onClick={() => copyToClipboard(videoData.manimCode)}
+                      onClick={() => copyToClipboard(displayData.manimCode)}
                     >
                       {copied ? (
                         <>
@@ -267,7 +359,7 @@ class FourierCirclesScene(Scene):
                   </div>
                   <div className="bg-gray-900 rounded-lg p-4 overflow-x-auto">
                     <pre className="text-gray-300 text-sm">
-                      <code>{videoData.manimCode}</code>
+                      <code>{displayData.manimCode}</code>
                     </pre>
                   </div>
                   <div className="mt-4 text-gray-400 text-sm">
@@ -282,7 +374,7 @@ class FourierCirclesScene(Scene):
 
             {/* Generation Chat Interface */}
             <div className="mt-6">
-              <GenerationChat initialPrompt={videoData.prompt} videoId={videoData.id} />
+              <GenerationChat initialPrompt={displayData.prompt} videoId={displayData.id} />
             </div>
           </div>
 

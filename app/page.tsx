@@ -68,12 +68,14 @@ export default function Home() {
               just a prompt. No coding required.
             </p>
             <div className="flex flex-col md:flex-row justify-center gap-4 mb-12">
-              <Button
-                size="lg"
-                className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
-              >
-                Get Started <ChevronRight className="ml-2 h-4 w-4" />
-              </Button>
+              <Link href="/generate">
+                <Button
+                  size="lg"
+                  className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
+                >
+                  Get Started <ChevronRight className="ml-2 h-4 w-4" />
+                </Button>
+              </Link>
               <Button
                 size="lg"
                 variant="outline"
@@ -94,9 +96,11 @@ export default function Home() {
                 placeholder="Explain the concept of Fourier transforms with visual examples..."
                 className="bg-gray-800 border-gray-700 text-white"
               />
-              <Button className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 min-w-[120px]">
-                Generate <Wand2 className="ml-2 h-4 w-4" />
-              </Button>
+              <Link href="/generate">
+                <Button className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 min-w-[120px]">
+                  Generate <Wand2 className="ml-2 h-4 w-4" />
+                </Button>
+              </Link>
             </div>
 
             <Tabs defaultValue="options">

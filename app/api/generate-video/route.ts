@@ -1,91 +1,121 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import { VideoGenerator } from "@/lib/video-generator";
+
+// Initialize Gemini AI
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
 export async function POST(request: NextRequest) {
   try {
-    const { prompt, options } = await request.json()
+    const session = await getServerSession(authOptions);
 
-    // In a real implementation, this would:
-    // 1. Generate manim code based on the prompt using an AI model
-    // 2. Execute the manim code to create the animation
-    // 3. Return a link to the generated video
+    // if (!session?.user?.id) {
+    //   return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    // }
 
-    // For now, we'll simulate a response
-    await new Promise((resolve) => setTimeout(resolve, 2000)) // Simulate processing time
+    const { prompt, options } = await request.json();
+
+    if (!prompt) {
+      return NextResponse.json(
+        { error: "Prompt is required" },
+        { status: 400 }
+      );
+    }
+
+    // Create video record in database
+    const video = await prisma.video.create({
+      data: {
+        title: prompt.slice(0, 100) + (prompt.length > 100 ? "..." : ""),
+        prompt,
+        options,
+        userId: (session?.user as any)?.id ?? "demo-user",
+        status: "GENERATING",
+      },
+    });
+
+    // Generate Manim code using Gemini AI
+    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+
+    const manimPrompt = `
+You are an expert in creating educational math videos using the Manim library (Mathematical Animation Engine). 
+Generate Python code using Manim that creates a beautiful, educational animation based on this prompt: "${prompt}"
+
+Requirements:
+1. Use Manim's latest syntax and best practices
+2. Create visually appealing animations similar to 3Blue1Brown style
+3. Include proper scene setup with dark background (#111111)
+4. Use appropriate colors (blues, yellows, whites for contrast)
+5. Add smooth transitions and animations
+6. Include text explanations where appropriate
+7. Make the animation educational and easy to follow
+8. The code should be complete and runnable
+9. Duration should be around 30-60 seconds
+
+Please provide only the Python code without any explanations or markdown formatting.
+Start with the imports and end with the scene class.
+`;
+
+    const result = await model.generateContent(manimPrompt);
+    const manimCode = result.response.text();
+
+    // Update video with generated code
+    await prisma.video.update({
+      where: { id: video.id },
+      data: { manimCode },
+    });
+
+    // Generate actual video from Manim code
+    // This runs asynchronously in the background
+    setImmediate(async () => {
+      try {
+        console.log(`Starting video generation for ${video.id}`);
+        
+        const videoGenerator = new VideoGenerator();
+        const result = await videoGenerator.generateVideo(manimCode, video.id);
+
+        if (result.success) {
+          await prisma.video.update({
+            where: { id: video.id },
+            data: {
+              status: "COMPLETED",
+              videoUrl: result.videoUrl,
+              thumbnailUrl: result.thumbnailUrl,
+              duration: result.duration,
+            },
+          });
+          console.log(`Video generation completed for ${video.id}`);
+        } else {
+          await prisma.video.update({
+            where: { id: video.id },
+            data: { 
+              status: "FAILED",
+              // Store error message for debugging
+            },
+          });
+          console.error(`Video generation failed for ${video.id}:`, result.error);
+        }
+      } catch (error) {
+        console.error(`Video generation error for ${video.id}:`, error);
+        await prisma.video.update({
+          where: { id: video.id },
+          data: { status: "FAILED" },
+        });
+      }
+    });
 
     return NextResponse.json({
       success: true,
-      videoUrl: "/placeholder.svg?height=720&width=1280",
-      manimCode: `from manim import *
-
-class FourierCirclesScene(Scene):
-    def construct(self):
-        self.camera.background_color = "#111111"
-        
-        # Add title
-        title = Text("Understanding Fourier Transforms", font="Arial")
-        title.to_edge(UP)
-        self.play(Write(title))
-        
-        # Create axes
-        axes = Axes(
-            x_range=[-1, 5, 1],
-            y_range=[-1.5, 1.5, 1],
-            axis_config={"color": BLUE}
-        )
-        axes_5,1],
-            y_range=[-1.5, 1.5, 1],
-            axis_config={"color": BLUE}
-        )
-        axes_labels = axes.get_axis_labels(x_label="t", y_label="f(t)")
-        
-        # Create a sine wave
-        sine_wave = axes.plot(lambda x: np.sin(2 * PI * x), color=YELLOW)
-        sine_label = Text("Original Signal", font="Arial", font_size=24)
-        sine_label.next_to(sine_wave, UP)
-        
-        self.play(Create(axes), Create(axes_labels))
-        self.play(Create(sine_wave), Write(sine_label))
-        
-        # Show Fourier decomposition
-        circles = VGroup()
-        dots = VGroup()
-        for n in range(1, 5):
-            circle = Circle(radius=1/n, color=BLUE_E)
-            circle.move_to(axes.c2p(n, 0))
-            
-            dot = Dot(color=RED)
-            dot.move_to(circle.point_from_proportion(0))
-            
-            circles.add(circle)
-            dots.add(dot)
-        
-        self.play(Create(circles))
-        self.play(Create(dots))
-        
-        # Animate the Fourier transform
-        self.play(
-            *[
-                Rotating(
-                    dots[i], 
-                    about_point=circles[i].get_center(),
-                    rate_func=linear,
-                    run_time=5,
-                    radians=TAU * (i+1)
-                )
-                for i in range(len(circles))
-            ]
-        )
-        
-        # Conclusion
-        conclusion = Text("Fourier transforms decompose signals into frequency components", 
-                          font="Arial", font_size=24)
-        conclusion.to_edge(DOWN)
-        self.play(Write(conclusion))
-        self.wait(2)`,
-      duration: "4:32",
-    })
+      videoId: video.id,
+      message: "Video generation started",
+    });
   } catch (error) {
-    console.error("Error generating video:", error)
-    return NextResponse.json({ error: "Failed to generate video" }, { status: 500 })
+    console.error("Error generating video:", error);
+    return NextResponse.json(
+      { error: "Failed to generate video" },
+      { status: 500 }
+    );
   }
 }
