@@ -45,7 +45,7 @@ model User {
   image         String?
   accounts      Account[]
   sessions      Session[]
-  videos        Video[]
+//   videos        Video[]
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 }
@@ -68,8 +68,8 @@ model Video {
   duration    String?
   status      VideoStatus @default(GENERATING)
   options     Json?
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+//   userId      String
+//   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }

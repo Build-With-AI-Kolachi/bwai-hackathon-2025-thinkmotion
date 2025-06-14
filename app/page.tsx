@@ -2,12 +2,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ChevronRight, Code, Play, Video, Wand2 } from "lucide-react";
+import { ChevronRight, Code, Video, Wand2 } from "lucide-react";
 import Link from "next/link";
 import VideoCard from "@/components/video-card";
 import FeatureCard from "@/components/feature-card";
 import PricingCard from "@/components/pricing-card";
 import { Badge } from "@/components/ui/badge";
+import DemoButton from "@/components/demo-button";
 
 export default function Home() {
   return (
@@ -76,13 +77,7 @@ export default function Home() {
                   Get Started <ChevronRight className="ml-2 h-4 w-4" />
                 </Button>
               </Link>
-              <Button
-                size="lg"
-                variant="outline"
-                className="border-gray-700 text-gray-300 hover:bg-gray-800"
-              >
-                Watch Demo <Play className="ml-2 h-4 w-4" />
-              </Button>
+              <DemoButton />
             </div>
           </div>
 

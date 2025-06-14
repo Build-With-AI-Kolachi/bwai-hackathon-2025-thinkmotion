@@ -17,7 +17,7 @@ export async function GET(
     const video = await prisma.video.findFirst({
       where: {
         id: params.id,
-        userId: (session.user as any)?.id ?? "demo-user",
+        // userId: (session.user as any)?.id ?? "demo-user",
       },
       select: {
         id: true,

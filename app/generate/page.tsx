@@ -56,7 +56,9 @@ export default function GeneratePage() {
       const data = await response.json()
 
       if (data.success) {
-        router.push(`/video/${data.videoId}`)
+        // Store the generated data in sessionStorage for the results page
+        sessionStorage.setItem('generatedVideo', JSON.stringify(data))
+        router.push('/results')
       } else {
         alert("Failed to generate video: " + data.error)
       }

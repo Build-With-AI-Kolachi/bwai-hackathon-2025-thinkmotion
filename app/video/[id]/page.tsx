@@ -66,6 +66,7 @@ export default function VideoPage({ params }: { params: { id: string } }) {
     return () => clearInterval(interval)
   }, [params.id, videoData?.status])
 
+  console.log(videoData)
   if (loading || !videoData) {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center">

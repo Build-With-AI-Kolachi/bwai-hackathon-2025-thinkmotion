@@ -25,19 +25,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create video record in database
-    const video = await prisma.video.create({
-      data: {
-        title: prompt.slice(0, 100) + (prompt.length > 100 ? "..." : ""),
-        prompt,
-        options,
-        userId: (session?.user as any)?.id ?? "demo-user",
-        status: "GENERATING",
-      },
-    });
-
+    // Simplified version - no database storage for hackathon demo
     // Generate Manim code using Gemini AI
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
     const manimPrompt = `
 You are an expert in creating educational math videos using the Manim library (Mathematical Animation Engine). 
@@ -61,6 +51,29 @@ Start with the imports and end with the scene class.
     const result = await model.generateContent(manimPrompt);
     const manimCode = result.response.text();
 
+    // Return the generated code directly for immediate display
+    return NextResponse.json({
+      success: true,
+      manimCode: manimCode,
+      title: prompt.slice(0, 100) + (prompt.length > 100 ? "..." : ""),
+      prompt: prompt,
+      options: options,
+      message: "Manim code generated successfully",
+    });
+
+    // COMMENTED OUT: Database and video generation for hackathon simplicity
+    /*
+    // Create video record in database
+    const video = await prisma.video.create({
+      data: {
+        title: prompt.slice(0, 100) + (prompt.length > 100 ? "..." : ""),
+        prompt,
+        options,
+        // userId: (session?.user as any)?.id ?? "demo-user",
+        status: "GENERATING",
+      },
+    });
+
     // Update video with generated code
     await prisma.video.update({
       where: { id: video.id },
@@ -68,7 +81,6 @@ Start with the imports and end with the scene class.
     });
 
     // Generate actual video from Manim code
-    // This runs asynchronously in the background
     setImmediate(async () => {
       try {
         console.log(`Starting video generation for ${video.id}`);
@@ -92,7 +104,6 @@ Start with the imports and end with the scene class.
             where: { id: video.id },
             data: { 
               status: "FAILED",
-              // Store error message for debugging
             },
           });
           console.error(`Video generation failed for ${video.id}:`, result.error);
@@ -111,6 +122,7 @@ Start with the imports and end with the scene class.
       videoId: video.id,
       message: "Video generation started",
     });
+    */
   } catch (error) {
     console.error("Error generating video:", error);
     return NextResponse.json(
